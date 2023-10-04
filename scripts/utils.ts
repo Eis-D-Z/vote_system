@@ -30,4 +30,31 @@ const getVoter = () => {
 
   return { address, keypair };
 };
-export {getClient, getVoter};
+
+const getAddressesInGroup = async (groupNumber: string, groups: string) => {
+  const { address, keypair, client } = getClient();
+
+  const resp: any = await client.getObject({
+    id: groups,
+    options: { showContent: true },
+  });
+  const groupsId = resp.data?.content?.fields?.groups.fields.id.id;
+  const dfs: any = await client.getDynamicFieldObject({
+    parentId: groupsId,
+    name: { type: "u64", value: groupNumber },
+  });
+  const membersId =
+    dfs.data?.content?.fields?.value?.fields?.members?.fields?.id?.id;
+  const members:any = await client.getDynamicFields({ parentId: membersId });
+  const voters: string[] = [];
+  members.data.forEach((item: any) => {
+    voters.push(item?.name?.value);
+  });
+  return voters;
+};
+
+getAddressesInGroup(
+  "0",
+  "0x8d7d5651051fe20555ec20a5d3898d7976b101e1dd648c0d2cd86c8ccf9afe50"
+);
+export { getClient, getVoter };
