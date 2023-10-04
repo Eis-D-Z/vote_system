@@ -11,8 +11,8 @@ module vote10::vote {
     const EVotingDayIsOver: u64 = 1;
     const ECantVoteYourself: u64 = 2;
     const EWrongGroup: u64 = 3;
-    const EAlreadyVoted: u64 = 4;
-    const ETooEarlyToEnd: u64 = 5;
+    const EVoteForWrongAddress: u64 = 4;
+    // const ETooEarlyToEnd: u64 = 5; // removed for testing
     const ENotAllGroupsParsedDuringEndVote: u64 = 6;
     const EVotingHasEnded: u64 = 7;
 
@@ -30,8 +30,7 @@ module vote10::vote {
 
     struct Group has store {
         number: u64,
-        members: LinkedTable<address, bool>,
-        votes: Table<address, u64>
+        members: LinkedTable<address, u64>,
     }
 
     struct VotingPass has key {
@@ -93,8 +92,7 @@ module vote10::vote {
         while(counter < total_groups) {
             let group = Group {
                 number: counter,
-                members: linked_table::new<address, bool>(ctx),
-                votes: table::new<address, u64>(ctx)
+                members: linked_table::new<address, u64>(ctx),
             };
             table::add<u64, Group>(&mut groups.groups, counter, group);
             counter = counter + 1;
@@ -120,8 +118,7 @@ module vote10::vote {
             let group_number = *vector::borrow<u64>(&random_group_numbers, group_index);
             let (citizen, _s) = linked_table::pop_front<address, bool>(&mut registry.citizens);
             let group = table::borrow_mut<u64, Group>(&mut voting_groups.groups, group_number);
-            linked_table::push_back<address, bool>(&mut group.members, citizen, true);
-            table::add<address, u64>(&mut group.votes, citizen, 0);
+            linked_table::push_back<address, u64>(&mut group.members, citizen, 0);
             let pass = VotingPass {
                 id: object::new(ctx),
                 group_number,
@@ -145,36 +142,38 @@ module vote10::vote {
         let sender = tx_context::sender(ctx);
         assert!(vote != sender, ECantVoteYourself);
         let group = table::borrow_mut<u64, Group>(&mut groups.groups, group_number);
-        assert!(linked_table::contains<address, bool>(&mut group.members, sender), EWrongGroup);
-        // can vote?
-        let can_vote = linked_table::borrow_mut<address, bool>(&mut group.members, sender);
-        assert!(*can_vote, EAlreadyVoted);
-        *can_vote = false;
-        let member_votes = table::borrow_mut<address, u64>(&mut group.votes, vote);
+        assert!(linked_table::contains<address, u64>(&mut group.members, sender), EWrongGroup);
+        // is vote valid
+        assert!(linked_table::contains<address, u64>(&mut group.members, vote), EVoteForWrongAddress);
+        let member_votes = linked_table::borrow_mut<address, u64>(&mut group.members, vote);
         *member_votes = *member_votes + 1;
         object::delete(id);
     }
 
-    public fun voting_end(registry: &mut VotingRegistry, groups: &mut VotingGroups, ctx: &mut TxContext) {
+    public fun voting_end(
+        _: &GovernmentCensusAdmin,
+        registry: &mut VotingRegistry,
+        groups: &mut VotingGroups,
+        // ctx: &mut TxContext
+    ) 
+    {
         // removed for testing
         // assert!(tx_context::epoch(ctx) > groups.epoch, ETooEarlyToEnd); 
         let total_groups = table::length(&groups.groups);
         let counter = 0;
         while (counter < total_groups) {
             let group = table::remove<u64, Group>(&mut groups.groups, counter);
-            let Group {number: _, members, votes} = group;
+            let Group {number: _, members} = group;
             let i = 0;
             let winner: address = @0x0;
             while (i < 10) {
-                let (citizen, _status) = linked_table::pop_front<address, bool>(&mut members);
-                let votes = table::remove<address, u64>(&mut votes, citizen);
+                let (citizen, votes) = linked_table::pop_front<address, u64>(&mut members);
                 if (votes >= 5) {
                     winner = citizen;
                     break
                 };
             };
-            table::drop<address, u64>(votes);
-            linked_table::drop<address, bool>(members);
+            linked_table::drop<address, u64>(members);
             if (winner != @0x0) {
                 linked_table::push_back<address, bool>(&mut registry.citizens, winner, true);
             };

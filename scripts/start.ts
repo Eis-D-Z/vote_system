@@ -166,7 +166,13 @@ const voting_start = async () => {
   });
 };
 
-const singleVote = async (ourVoter: string, kp: Ed25519Keypair, sponsor: string, sponsorKeypair: Ed25519Keypair, client: SuiClient) => {
+const singleVote = async (
+  ourVoter: string,
+  kp: Ed25519Keypair,
+  sponsor: string,
+  sponsorKeypair: Ed25519Keypair,
+  client: SuiClient
+) => {
   const tx = new TransactionBlock();
   const resp = await client.getOwnedObjects({
     owner: kp.toSuiAddress(),
@@ -178,7 +184,9 @@ const singleVote = async (ourVoter: string, kp: Ed25519Keypair, sponsor: string,
     return item.data?.type === `${pkg}::vote::VotingPass`;
   });
   const votingPassId = votingPassObj.data?.objectId!;
-  console.log(votingPassId);
+  console.log(
+    `Voter ${kp.toSuiAddress()} with vote pass: ${votingPassId} is voting`
+  );
 
   tx.moveCall({
     target: `${pkg}::vote::vote`,
@@ -190,13 +198,16 @@ const singleVote = async (ourVoter: string, kp: Ed25519Keypair, sponsor: string,
   });
   tx.setSender(kp.toSuiAddress());
   tx.setGasOwner(sponsor);
-  const txBytes = await tx.build({client});
-  const {signature: sponsorSig, bytes: _txb1} = await sponsorKeypair.signTransactionBlock(txBytes);
-  const {signature: ownerSig, bytes: _txb2} = await kp.signTransactionBlock(txBytes);
+  const txBytes = await tx.build({ client });
+  const { signature: sponsorSig, bytes: _txb1 } =
+    await sponsorKeypair.signTransactionBlock(txBytes);
+  const { signature: ownerSig, bytes: _txb2 } = await kp.signTransactionBlock(
+    txBytes
+  );
   await client.executeTransactionBlock({
     transactionBlock: txBytes,
     requestType: "WaitForEffectsCert",
-    signature: [ownerSig, sponsorSig]
+    signature: [ownerSig, sponsorSig],
   });
 };
 
@@ -207,28 +218,38 @@ const voting = async () => {
     await singleVote(ourVoter, kp, address, keypair, client);
   }
   // ourVoter vote
-  await singleVote(keypairs[0].toSuiAddress(), voterKeypair, address, keypair, client);
+  await singleVote(
+    keypairs[0].toSuiAddress(),
+    voterKeypair,
+    address,
+    keypair,
+    client
+  );
 };
 
 const end = async () => {
-    let {address, keypair, client} = getClient();
-    const tx = new TransactionBlock();
+  let { address, keypair, client } = getClient();
+  const tx = new TransactionBlock();
 
-    tx.moveCall({
-        target: `${pkg}::vote::vote_end`,
-        arguments: [tx.object(sharedObjects.registry), tx.object(sharedObjects.groups)]
-    });
+  tx.moveCall({
+    target: `${pkg}::vote::voting_end`,
+    arguments: [
+      tx.object(adminCap),
+      tx.object(sharedObjects.registry),
+      tx.object(sharedObjects.groups),
+    ],
+  });
 
-    const response = await client.signAndExecuteTransactionBlock({
-        transactionBlock: tx,
-        requestType: "WaitForLocalExecution",
-        options: {
-            showEffects: true
-        },
-        signer: keypair
-    });
-    console.log(JSON.stringify(response));
-}
+  const response = await client.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+    requestType: "WaitForLocalExecution",
+    options: {
+      showEffects: true,
+    },
+    signer: keypair,
+  });
+  console.log(JSON.stringify(response));
+};
 
 const main = async () => {
   await newCampaign();
@@ -238,4 +259,3 @@ const main = async () => {
   end();
 };
 main();
-
